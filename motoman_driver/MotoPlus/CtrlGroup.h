@@ -95,6 +95,7 @@ typedef struct
 	JointMotionData jointMotionData;			// joint motion command data in radian
 	JointMotionData jointMotionDataToProcess;	// joint motion command data in radian to process
 	BOOL hasDataToProcess;						// indicates that there is data to process
+	BOOL canContinueMotion;						// indicates that a new trajectory can be appended to the end of the previous one
 	int tidAddToIncQueue;						// ThreadId to add incremental values to the queue
 	int timeLeftover_ms;						// Time left over after reaching the end of a trajectory to complete the interpolation period
 	long prevPulsePos[MAX_PULSE_AXES];			// The commanded pulse position that the trajectory starts at (Ros_MotionServer_StartTrajMode)

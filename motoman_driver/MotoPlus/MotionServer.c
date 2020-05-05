@@ -211,6 +211,7 @@ void Ros_MotionServer_StopConnection(Controller* controller, int connectionIndex
 		for(i=0; i < controller->numGroup; i++)
 		{
 			controller->ctrlGroups[i]->hasDataToProcess = FALSE;
+			controller->ctrlGroups[i]->canContinueMotion = FALSE;
 			tid = controller->ctrlGroups[i]->tidAddToIncQueue;
 			controller->ctrlGroups[i]->tidAddToIncQueue = INVALID_TASK;
 			mpDeleteTask(tid);
@@ -551,6 +552,12 @@ int Ros_MotionServer_JointTrajPtFullExProcess(Controller* controller, SimpleMsg*
 			// set reply
 			if(ret == 0)
 				Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_SUCCESS, 0, replyMsg, msgBody->jointTrajPtData[i].groupNo);
+			else if (ret == 1)  // Busy
+			{
+				//printf("Warning: Ros_SimpleMsg_MotionReply returned %d\n", ret);
+				Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_BUSY, 0, replyMsg, msgBody->jointTrajPtData[i].groupNo);
+				return 0; //stop processing other groups in this loop
+			}
 			else
 			{
 				printf("ERROR: Ros_MotionServer_InitTrajPointFullEx returned %d\n", ret);
@@ -568,7 +575,7 @@ int Ros_MotionServer_JointTrajPtFullExProcess(Controller* controller, SimpleMsg*
 				Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_SUCCESS, 0, replyMsg, msgBody->jointTrajPtData[i].groupNo);
 			else if(ret == 1)
 			{
-				printf("ERROR: Ros_MotionServer_AddTrajPointFullEx returned %d\n", ret);
+				//printf("Warning: Ros_MotionServer_AddTrajPointFullEx returned %d\n", ret);
 				Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_BUSY, 0, replyMsg, msgBody->jointTrajPtData[i].groupNo);
 				return 0; //stop processing other groups in this loop
 			}
@@ -732,7 +739,12 @@ BOOL Ros_MotionServer_StopMotion(Controller* controller)
 	
 	// All motion should be stopped at this point, so turn of the flag
 	controller->bStopMotion = FALSE;
-	
+	for (groupNo = 0; groupNo < controller->numGroup; groupNo++)
+	{
+		controller->ctrlGroups[groupNo]->canContinueMotion = FALSE;
+		//printf("canContinueMotion = FALSE2\r\n");
+	}
+
 	return(bStopped && bRet);
 }
 
@@ -1103,6 +1115,12 @@ int Ros_MotionServer_JointTrajDataProcess(Controller* controller, SimpleMsg* rec
 		// set reply
 		if(ret == 0)
 			Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_SUCCESS, 0, replyMsg, receiveMsg->body.jointTrajData.groupNo);
+		else if (ret == 1)  // Busy
+		{
+			//printf("Warning: Ros_SimpleMsg_MotionReply returned %d\n", ret);
+			Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_BUSY, 0, replyMsg, receiveMsg->body.jointTrajData.groupNo);
+			return 0; //stop processing other groups in this loop
+		}
 		else
 			Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_INVALID, ret, replyMsg, receiveMsg->body.jointTrajData.groupNo);
 	}
@@ -1154,13 +1172,21 @@ int Ros_MotionServer_InitTrajPointFull(CtrlGroup* ctrlGroup, SmBodyJointTrajPtFu
 	long pulsePos[MAX_PULSE_AXES];
 	long curPos[MAX_PULSE_AXES];
 	int i;
+	BOOL continuingMotion;
+
+	// Check that there isn't data current being processed
+	if (ctrlGroup->hasDataToProcess)
+	{
+		// Busy
+		return ROS_RESULT_BUSY;
+	}
 
 	if(ctrlGroup->groupNo == jointTrajData->groupNo)
 	{
 		// Assign start position
 		Ros_MotionServer_ConvertToJointMotionData(jointTrajData, &ctrlGroup->jointMotionData);
 		ctrlGroup->timeLeftover_ms = 0;
-		ctrlGroup->q_time = ctrlGroup->jointMotionData.time;
+		//ctrlGroup->q_time = ctrlGroup->jointMotionData.time;
 		
 		// For MPL80/100 robot type (SLUBT): Controller automatically moves the B-axis
 		// to maintain orientation as other axes are moved.
@@ -1175,39 +1201,67 @@ int Ros_MotionServer_InitTrajPointFull(CtrlGroup* ctrlGroup, SmBodyJointTrajPtFu
 		Ros_CtrlGroup_ConvertToMotoPos(ctrlGroup, ctrlGroup->jointMotionData.pos, pulsePos);
 		Ros_CtrlGroup_GetPulsePosCmd(ctrlGroup, curPos);
 
-		// Initialize prevPulsePos to the current position
-		Ros_CtrlGroup_GetPulsePosCmd(ctrlGroup, ctrlGroup->prevPulsePos);
-		
-		// Check for each axis
-		for(i=0; i<MAX_PULSE_AXES; i++)
+		//// If previous trajectory was sent check for possible continuation
+		continuingMotion = ctrlGroup->canContinueMotion;
+		if (continuingMotion)
 		{
-			// Check if position matches current command position
-			if(abs(pulsePos[i] - curPos[i]) > START_MAX_PULSE_DEVIATION)
+			for (i = 0; i < MAX_PULSE_AXES; i++)
 			{
-				printf("ERROR: Trajectory start position doesn't match current position (MOTO joint order).\r\n");
-				printf(" - Requested start: %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld\r\n",
-					pulsePos[0], pulsePos[1], pulsePos[2],
-					pulsePos[3], pulsePos[4], pulsePos[5],
-					pulsePos[6], pulsePos[7]);
-				printf(" - Current pos: %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld\r\n",
-					curPos[0], curPos[1], curPos[2],
-					curPos[3], curPos[4], curPos[5],
-					curPos[6], curPos[7]);
-				printf(" - ctrlGroup->prevPulsePos: %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld\r\n",
-					ctrlGroup->prevPulsePos[0], ctrlGroup->prevPulsePos[1], ctrlGroup->prevPulsePos[2],
-					ctrlGroup->prevPulsePos[3], ctrlGroup->prevPulsePos[4], ctrlGroup->prevPulsePos[5],
-					ctrlGroup->prevPulsePos[6], ctrlGroup->prevPulsePos[7]);
-
-				return ROS_RESULT_INVALID_DATA_START_POS;
+				if (abs(pulsePos[i] - ctrlGroup->prevPulsePos[i]) > 0)
+				{
+					printf("Can continue motion because position are not matching on axis: %d\r\n", i);
+					printf(" - Requested start: %ld    - PrevPulsePos: %ld\r\n", pulsePos[i], ctrlGroup->prevPulsePos[i]);
+					continuingMotion = FALSE;
+					break;
+				}
 			}
-			
-			// Check maximum velocity limit
-			if(abs(ctrlGroup->jointMotionData.vel[i]) > ctrlGroup->maxSpeed[i])
+		}
+
+		if (!continuingMotion)
+		{
+			// Check if start position is close enough to the current stopped position
+			for (i = 0; i < MAX_PULSE_AXES; i++)
+			{
+				// Check if position matches current command position
+				if (abs(pulsePos[i] - curPos[i]) > START_MAX_PULSE_DEVIATION)
+				{
+					printf("ERROR: Trajectory start position doesn't match current position (MOTO joint order).\r\n");
+					printf(" - Requested start: %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld\r\n",
+						pulsePos[0], pulsePos[1], pulsePos[2],
+						pulsePos[3], pulsePos[4], pulsePos[5],
+						pulsePos[6], pulsePos[7]);
+					printf(" - Current pos: %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld\r\n",
+						curPos[0], curPos[1], curPos[2],
+						curPos[3], curPos[4], curPos[5],
+						curPos[6], curPos[7]);
+
+					return ROS_RESULT_INVALID_DATA_START_POS;
+				}
+			}
+
+			printf("Initiating motion from current position\r\n");
+
+			// Initialize prevPulsePos to the current position
+			Ros_CtrlGroup_GetPulsePosCmd(ctrlGroup, ctrlGroup->prevPulsePos);
+			memcpy(ctrlGroup->prevPulsePos, curPos, sizeof(ctrlGroup->prevPulsePos));
+		}
+		else
+			printf("Continuing motion from previous trajectory\r\n");
+
+		// Check maximum velocity limit (no sure about this check... speed should be 0 on initial trajectory)
+		for (i = 0; i < MAX_PULSE_AXES; i++)
+		{
+			if (abs(ctrlGroup->jointMotionData.vel[i]) > ctrlGroup->maxSpeed[i])
 			{
 				// excessive speed
 				return ROS_RESULT_INVALID_DATA_SPEED;
 			}
-		}		
+		}
+
+		// Store of the message trajectory data to the control group for processing 
+		memcpy(&ctrlGroup->jointMotionDataToProcess, &ctrlGroup->jointMotionData, sizeof(JointMotionData));
+		ctrlGroup->hasDataToProcess = TRUE;
+		ctrlGroup->canContinueMotion = TRUE;
 
 		//printf("Trajectory Start Initialized\r\n");
 		// Return success
@@ -1251,6 +1305,11 @@ int Ros_MotionServer_AddTrajPointFull(CtrlGroup* ctrlGroup, SmBodyJointTrajPtFul
 		// Busy
 		return ROS_RESULT_BUSY;
 	}
+
+	if (!ctrlGroup->canContinueMotion)
+	{
+		return ROS_RESULT_INVALID_SEQUENCE;
+	}
 	
 	// Convert message data to a jointMotionData
 	Ros_MotionServer_ConvertToJointMotionData(jointTrajData, &jointData);
@@ -1276,7 +1335,7 @@ int Ros_MotionServer_AddTrajPointFull(CtrlGroup* ctrlGroup, SmBodyJointTrajPtFul
 		}
 	}			
 
-	// Store of the message trajectory data to the control group for processing 
+	// Store of the message trajectory data to the control group for processing
 	memcpy(&ctrlGroup->jointMotionDataToProcess, &jointData, sizeof(JointMotionData));
 	ctrlGroup->hasDataToProcess = TRUE;
 
@@ -1297,6 +1356,7 @@ void Ros_MotionServer_AddToIncQueueProcess(Controller* controller, int groupNo)
 	// Initialization of pointers and memory
 	interpolPeriod = controller->interpolPeriod; 
 	ctrlGroup->hasDataToProcess = FALSE;
+	ctrlGroup->canContinueMotion = FALSE;
 
 	FOREVER
 	{
@@ -1376,6 +1436,21 @@ void Ros_MotionServer_JointTrajDataToIncQueue(Controller* controller, int groupN
 			accCoef2[i] = ( -12 * (endTrajData->pos[i] - startTrajData->pos[i]) / (interval * interval * interval))
 						+ ( 6 * (endTrajData->vel[i] + startTrajData->vel[i]) / (interval * interval) );
 		}
+	}
+	else if (interval == 0.0)
+	{
+		// Trajectory initial point
+		incData.time = startTrajData->time;
+		//printf("Initializing trajectory at time: %d\r\n", incData.time);
+
+		// Add the increment to the queue
+		Ros_MotionServer_AddPulseIncPointToQ(controller, groupNo, &incData);
+		
+		// Initialize variables to begin new trajectory
+		Ros_CtrlGroup_ConvertToMotoPos(ctrlGroup, endTrajData->pos, ctrlGroup->prevPulsePos);
+		memcpy(curTrajData, endTrajData, sizeof(JointMotionData));
+		ctrlGroup->timeLeftover_ms = 0;
+		return;
 	}
 	else
 	{
@@ -1465,6 +1540,8 @@ BOOL Ros_MotionServer_AddPulseIncPointToQ(Controller* controller, int groupNo, I
 {	
 	int index;
 	
+	//printf("Q: %d  b_inc=%d\r\n", dataToEnQ->time, dataToEnQ->inc[4]);
+
 	// Set pointer to specified queue
 	Incremental_q* q = &controller->ctrlGroups[groupNo]->inc_q;
 
@@ -1513,6 +1590,9 @@ BOOL Ros_MotionServer_ClearQ(Controller* controller, int groupNo)
 	// Check group number valid
 	if(!Ros_Controller_IsValidGroupNo(controller, groupNo))
 		return FALSE;
+
+	// Set flag that motion cannot be restarted from the previous path (seen the previous path end might not hae been reached)
+	controller->ctrlGroups[groupNo]->canContinueMotion = FALSE;
 
 	// Set pointer to specified queue
 	q = &controller->ctrlGroups[groupNo]->inc_q;
@@ -1653,19 +1733,25 @@ void Ros_MotionServer_IncMoveLoopStart(Controller* controller) //<-- IP_CLK prio
 					if(q->cnt > 0)
 					{
 						time = q->data[q->idx].time;
-						q_time = controller->ctrlGroups[i]->q_time;
+						if (time == 0)
+						{
+							q_time = 0;
+							//printf("Initial inc point found\r\n");
+						}
+						else
+							q_time = controller->ctrlGroups[i]->q_time;
 						moveData.grp_pos_info[i].pos_tag.data[2] = q->data[q->idx].tool;
 						moveData.grp_pos_info[i].pos_tag.data[3] = q->data[q->idx].frame;
 						moveData.grp_pos_info[i].pos_tag.data[4] = q->data[q->idx].user;
 						
 						memcpy(&moveData.grp_pos_info[i].pos, &q->data[q->idx].inc, sizeof(LONG) * MP_GRP_AXES_NUM);
-					
+
 						// increment index in the queue and decrease the count
 						q->idx = Q_OFFSET_IDX( q->idx, 1, Q_SIZE );
 						q->cnt--;
 						
 						// Check if complet interpolation period covered
-						while(q->cnt > 0)
+						while (q->cnt > 0)
 						{
 							if( (q_time <= q->data[q->idx].time) 
 							&&  (q->data[q->idx].time - q_time <= controller->interpolPeriod) )
@@ -1747,6 +1833,7 @@ void Ros_MotionServer_IncMoveLoopStart(Controller* controller) //<-- IP_CLK prio
 			}			
 #else
 			ret = mpExRcsIncrementMove(&moveData);
+			//printf("%d b_inc: %d\r\n", time, moveData.grp_pos_info[0].pos[4]);
 			if(ret != 0)
 			{
 				if(ret == -3)
@@ -1757,7 +1844,28 @@ void Ros_MotionServer_IncMoveLoopStart(Controller* controller) //<-- IP_CLK prio
 #endif
 			
 		}
-		//else  // for testing
+		else if (!Ros_Controller_IsMotionReady(controller) || controller->bStopMotion) // prevent continuing motion
+		{
+			// Check if queue needs to be cleared
+			if (Ros_MotionServer_HasDataInQueue)
+			{
+				Ros_MotionServer_ClearQ_All(controller);
+			}
+
+			// Set flag that motion cannot be restarted from the previous path (seen the previous path end might not hae been reached)
+			if (controller->bStopMotion)
+			{
+				for (i = 0; i < controller->numGroup; i++)
+				{
+					if (controller->ctrlGroups[i]->canContinueMotion)
+					{
+						controller->ctrlGroups[i]->canContinueMotion = FALSE;
+						//printf("canContinueMotion = FALSE\r\n");
+					}
+				}
+			}
+		}
+		//else
 		//{
 		//	if(!bNoData)
 		//	{
