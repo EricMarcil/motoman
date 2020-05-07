@@ -1209,8 +1209,8 @@ int Ros_MotionServer_InitTrajPointFull(CtrlGroup* ctrlGroup, SmBodyJointTrajPtFu
 			{
 				if (abs(pulsePos[i] - ctrlGroup->prevPulsePos[i]) > 0)
 				{
-					printf("Can continue motion because position are not matching on axis: %d\r\n", i);
-					printf(" - Requested start: %ld    - PrevPulsePos: %ld\r\n", pulsePos[i], ctrlGroup->prevPulsePos[i]);
+					//printf("Can't continue motion because position are not matching on axis: %d\r\n", i);
+					//printf(" - Requested start: %ld    - PrevPulsePos: %ld\r\n", pulsePos[i], ctrlGroup->prevPulsePos[i]);
 					continuingMotion = FALSE;
 					break;
 				}
@@ -1242,7 +1242,6 @@ int Ros_MotionServer_InitTrajPointFull(CtrlGroup* ctrlGroup, SmBodyJointTrajPtFu
 			printf("Initiating motion from current position\r\n");
 
 			// Initialize prevPulsePos to the current position
-			Ros_CtrlGroup_GetPulsePosCmd(ctrlGroup, ctrlGroup->prevPulsePos);
 			memcpy(ctrlGroup->prevPulsePos, curPos, sizeof(ctrlGroup->prevPulsePos));
 		}
 		else
@@ -1833,6 +1832,7 @@ void Ros_MotionServer_IncMoveLoopStart(Controller* controller) //<-- IP_CLK prio
 			}			
 #else
 			ret = mpExRcsIncrementMove(&moveData);
+
 			//printf("%d b_inc: %d\r\n", time, moveData.grp_pos_info[0].pos[4]);
 			if(ret != 0)
 			{
@@ -1842,7 +1842,6 @@ void Ros_MotionServer_IncMoveLoopStart(Controller* controller) //<-- IP_CLK prio
 					printf("mpExRcsIncrementMove returned: %d\r\n", ret);
 			}
 #endif
-			
 		}
 		else if (!Ros_Controller_IsMotionReady(controller) || controller->bStopMotion) // prevent continuing motion
 		{
