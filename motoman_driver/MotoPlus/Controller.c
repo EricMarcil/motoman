@@ -610,32 +610,41 @@ BOOL Ros_Controller_IsInMotion(Controller* controller)
 		return TRUE;
 	else if (bDataInQ == ERROR)
 		return ERROR;
-	else
-	{
-		//for each control group
-		for (groupNo = 0; groupNo < controller->numGroup; groupNo++)
-		{
-			//Check group number valid
-			if (!Ros_Controller_IsValidGroupNo(controller, groupNo))
-				continue;
+	//-------------------------------------------------------------
+	// Command position is where the robot has been commanded to go.
+	// Feedback position represent the motor current position.
+	// During motion, feedback position can be between 150 ms to 400 ms behind the command position.
+	// The code below checks if the feedback position has reached the command position. 
+	// If the Ros_SimpleMsg_JointFeedback function is reporting the command position,
+	// since the next planning will be done from that position, this check 
+	// can be commented out to allow quicker planning of the next trajectory.
+	//-------------------------------------------------------------
+	//else
+	//{
+	//	//for each control group
+	//	for (groupNo = 0; groupNo < controller->numGroup; groupNo++)
+	//	{
+	//		//Check group number valid
+	//		if (!Ros_Controller_IsValidGroupNo(controller, groupNo))
+	//			continue;
 
-			//Check if the feeback position has caught up to the command position
-			ctrlGroup = controller->ctrlGroups[groupNo];
+	//		//Check if the feeback position has caught up to the command position
+	//		ctrlGroup = controller->ctrlGroups[groupNo];
 
-			Ros_CtrlGroup_GetFBPulsePos(ctrlGroup, fbPulsePos);
-			Ros_CtrlGroup_GetPulsePosCmd(ctrlGroup, cmdPulsePos);
+	//		Ros_CtrlGroup_GetFBPulsePos(ctrlGroup, fbPulsePos);
+	//		Ros_CtrlGroup_GetPulsePosCmd(ctrlGroup, cmdPulsePos);
 
-			for (i = 0; i < MP_GRP_AXES_NUM; i += 1)
-			{
-				if (ctrlGroup->axisType.type[i] != AXIS_INVALID)
-				{
-					// Check if position matches current command position
-					if (abs(fbPulsePos[i] - cmdPulsePos[i]) > START_MAX_PULSE_DEVIATION)
-						return TRUE;
-				}
-			}
-		}
-	}
+	//		for (i = 0; i < MP_GRP_AXES_NUM; i += 1)
+	//		{
+	//			if (ctrlGroup->axisType.type[i] != AXIS_INVALID)
+	//			{
+	//				// Check if position matches current command position
+	//				if (abs(fbPulsePos[i] - cmdPulsePos[i]) > START_MAX_PULSE_DEVIATION)
+	//					return TRUE;
+	//			}
+	//		}
+	//	}
+	//}
 
 	return FALSE;
 }

@@ -69,8 +69,21 @@ int Ros_SimpleMsg_JointFeedback(CtrlGroup* ctrlGroup, SimpleMsg* sendMsg)
 	sendMsg->body.jointFeedback.groupNo = ctrlGroup->groupNo;
 	sendMsg->body.jointFeedback.validFields = Valid_Position;
 	
-	//feedback position
-	bRet = Ros_CtrlGroup_GetFBPulsePos(ctrlGroup, pulsePos);
+	//-------------------------------------------------------------
+	// Command position is where the robot has been commanded to go.
+	// Feedback position represent the motor current position.
+	// During motion, feedback position can be between 150 ms to 400 ms behind the command position.
+	// You can switch which position is more appropriate for your application by 
+	// commenting//uncommenting the appropriate section below.
+	// Also make adjustment to the "Ros_Controller_IsInMotion" function
+	//-------------------------------------------------------------
+
+	//feedback position (use for more accurate true position of the arm)
+	//bRet = Ros_CtrlGroup_GetFBPulsePos(ctrlGroup, pulsePos);
+	
+	//Command position (use for more stable current position allowing faster restart)
+	bRet = Ros_CtrlGroup_GetPulsePosCmd(ctrlGroup, pulsePos);
+	
 	if(bRet!=TRUE)
 		return 0;				
 	Ros_CtrlGroup_ConvertToRosPos(ctrlGroup, pulsePos, sendMsg->body.jointFeedback.pos);
