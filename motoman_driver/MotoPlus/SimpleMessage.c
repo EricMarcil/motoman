@@ -70,9 +70,7 @@ int Ros_SimpleMsg_JointFeedback(CtrlGroup* ctrlGroup, SimpleMsg* sendMsg)
 	sendMsg->body.jointFeedback.validFields = Valid_Position;
 	
 	//feedback position
-	//bRet = Ros_CtrlGroup_GetFBPulsePos(ctrlGroup, pulsePos);  
-	bRet = Ros_CtrlGroup_GetPulsePosCmd(ctrlGroup, pulsePos); // modification to change for command to make it easier to restart
-
+	bRet = Ros_CtrlGroup_GetFBPulsePos(ctrlGroup, pulsePos);
 	if(bRet!=TRUE)
 		return 0;				
 	Ros_CtrlGroup_ConvertToRosPos(ctrlGroup, pulsePos, sendMsg->body.jointFeedback.pos);

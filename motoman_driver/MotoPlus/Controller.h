@@ -80,8 +80,6 @@
 #define MASK_ISALARM_ACTIVEALARM 0x02
 #define MASK_ISALARM_ACTIVEERROR 0x01
 
-#define NO_MOTION_AFTER_QUEUE_EMPTY 7
-
 typedef enum 
 {
 	IO_ROBOTSTATUS_ALARM_MAJOR = 0,
@@ -136,7 +134,6 @@ typedef struct
 	int	sdMotionConnections[MAX_MOTION_CONNECTIONS];		// Socket Descriptor array for Motion Server
 	int	tidMotionConnections[MAX_MOTION_CONNECTIONS];  		// ThreadId array for Motion Server
 	int tidIncMoveThread;  									// ThreadId for sending the incremental move to the controller
-	int incQueueEmptyCount;									// Counts how many interporlation since the queue has been empty
 
 #ifdef DX100
 	BOOL bSkillMotionReady[2];								// Boolean indicating that the SKILL command required for DX100 is active

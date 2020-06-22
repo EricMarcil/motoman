@@ -1711,7 +1711,6 @@ void Ros_MotionServer_IncMoveLoopStart(Controller* controller) //<-- IP_CLK prio
 		moveData.ctrl_grp |= (0x01 << i); 
 		moveData.grp_pos_info[i].pos_tag.data[0] = Ros_CtrlGroup_GetAxisConfig(controller->ctrlGroups[i]);
 	}
-	controller->incQueueEmptyCount = NO_MOTION_AFTER_QUEUE_EMPTY + 1;
 
 	FOREVER
 	{
@@ -1722,8 +1721,7 @@ void Ros_MotionServer_IncMoveLoopStart(Controller* controller) //<-- IP_CLK prio
 			&& !controller->bStopMotion )
 		{
 			//bNoData = FALSE;   // for testing
-			controller->incQueueEmptyCount = 0;
-
+			
 			for(i=0; i<controller->numGroup; i++)
 			{
 				q = &controller->ctrlGroups[i]->inc_q;
@@ -1848,13 +1846,10 @@ void Ros_MotionServer_IncMoveLoopStart(Controller* controller) //<-- IP_CLK prio
 		else if (!Ros_Controller_IsMotionReady(controller) || controller->bStopMotion) // prevent continuing motion
 		{
 			// Check if queue needs to be cleared
-			if (Ros_MotionServer_HasDataInQueue(controller))
+			if (Ros_MotionServer_HasDataInQueue)
 			{
 				Ros_MotionServer_ClearQ_All(controller);
-				controller->incQueueEmptyCount = 0;
 			}
-			else if (controller->incQueueEmptyCount <= NO_MOTION_AFTER_QUEUE_EMPTY)
-				controller->incQueueEmptyCount++;
 
 			// Set flag that motion cannot be restarted from the previous path (seen the previous path end might not hae been reached)
 			if (controller->bStopMotion)
@@ -1869,16 +1864,14 @@ void Ros_MotionServer_IncMoveLoopStart(Controller* controller) //<-- IP_CLK prio
 				}
 			}
 		}
-		else
-		{
-			if(controller->incQueueEmptyCount <= NO_MOTION_AFTER_QUEUE_EMPTY)
-				controller->incQueueEmptyCount++;
+		//else
+		//{
 		//	if(!bNoData)
 		//	{
 		//		printf("INFO: No data in queue.\r\n");
 		//		bNoData = TRUE;
 		//	}
-		}
+		//}
 	}
 }
 
