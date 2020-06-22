@@ -147,7 +147,6 @@ void Ros_StateServer_SendState(Controller* controller)
 			Ros_StateServer_SendMsgToAllClient(controller, &sendMsgFEx, fexMsgSize);
 
 		// Send controller/robot status
-		msgSize = Ros_Controller_StatusToMsg(controller, &sendMsgStatus);
 		if(msgSize > 0)
 		{
 			Ros_StateServer_SendMsgToAllClient(controller, &sendMsgStatus, msgSize);

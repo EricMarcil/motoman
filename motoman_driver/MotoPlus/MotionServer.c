@@ -1846,7 +1846,7 @@ void Ros_MotionServer_IncMoveLoopStart(Controller* controller) //<-- IP_CLK prio
 		else if (!Ros_Controller_IsMotionReady(controller) || controller->bStopMotion) // prevent continuing motion
 		{
 			// Check if queue needs to be cleared
-			if (Ros_MotionServer_HasDataInQueue)
+			if (Ros_MotionServer_HasDataInQueue(controller))
 			{
 				Ros_MotionServer_ClearQ_All(controller);
 			}
