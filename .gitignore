@@ -40,3 +40,5 @@ motoman_driver/MotoPlus/_buildLog/MotoROSYRC1000.log
 motoman_driver/MotoPlus/_buildLog/MotoROSYRC1000u.log
 *.cache
 *.user
+motoman_driver/MotoPlus/.vs/MpRosAllControllers/v16/Browse.VC.db-shm
+motoman_driver/MotoPlus/.vs/MpRosAllControllers/v16/Browse.VC.db-wal

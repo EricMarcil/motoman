@@ -96,6 +96,7 @@ void Ros_StateServer_StartNewConnection(Controller* controller, int sd)
 void Ros_StateServer_SendState(Controller* controller)
 {
 	int groupNo;
+	SimpleMsg sendMsgStatus;
 	SimpleMsg sendMsg;
 	SimpleMsg sendMsgFEx;
 	int msgSize, fexMsgSize = 0;
@@ -107,6 +108,10 @@ void Ros_StateServer_SendState(Controller* controller)
 	printf("Controller number of group = %d\r\n", controller->numGroup);
 	
 	bHasConnections = FALSE;
+
+	// Get controller/robot status but send after sending position feedback
+	// to prevent InMotion becomes false while getting position
+	msgSize = Ros_Controller_StatusToMsg(controller, &sendMsgStatus);
 
 	//Thread for state server should never terminate
 	while(TRUE)
@@ -142,10 +147,10 @@ void Ros_StateServer_SendState(Controller* controller)
 			Ros_StateServer_SendMsgToAllClient(controller, &sendMsgFEx, fexMsgSize);
 
 		// Send controller/robot status
-		msgSize = Ros_Controller_StatusToMsg(controller, &sendMsg);
+		msgSize = Ros_Controller_StatusToMsg(controller, &sendMsgStatus);
 		if(msgSize > 0)
 		{
-			Ros_StateServer_SendMsgToAllClient(controller, &sendMsg, msgSize);
+			Ros_StateServer_SendMsgToAllClient(controller, &sendMsgStatus, msgSize);
 		}
 		Ros_Sleep(STATE_UPDATE_MIN_PERIOD);
 	}
