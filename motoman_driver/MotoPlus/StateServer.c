@@ -99,7 +99,7 @@ void Ros_StateServer_SendState(Controller* controller)
 	SimpleMsg sendMsgStatus;
 	SimpleMsg sendMsg;
 	SimpleMsg sendMsgFEx;
-	int msgSize, fexMsgSize = 0;
+	int msgSize, msgStatusSize, fexMsgSize = 0;
 	BOOL bOkToSendExFeedback;
 	BOOL bHasConnections;
 	BOOL bSuccesfulSend;
@@ -109,13 +109,13 @@ void Ros_StateServer_SendState(Controller* controller)
 	
 	bHasConnections = FALSE;
 
-	// Get controller/robot status but send after sending position feedback
-	// to prevent InMotion becomes false while getting position
-	msgSize = Ros_Controller_StatusToMsg(controller, &sendMsgStatus);
-
 	//Thread for state server should never terminate
 	while(TRUE)
 	{
+		// Get controller/robot status but send after sending position feedback
+		// to prevent InMotion becomes false while getting position
+		msgStatusSize = Ros_Controller_StatusToMsg(controller, &sendMsgStatus);
+
 		Ros_SimpleMsg_JointFeedbackEx_Init(controller->numGroup, &sendMsgFEx);
 		bOkToSendExFeedback = TRUE;
 
@@ -147,9 +147,9 @@ void Ros_StateServer_SendState(Controller* controller)
 			Ros_StateServer_SendMsgToAllClient(controller, &sendMsgFEx, fexMsgSize);
 
 		// Send controller/robot status
-		if(msgSize > 0)
+		if(msgStatusSize > 0)
 		{
-			Ros_StateServer_SendMsgToAllClient(controller, &sendMsgStatus, msgSize);
+			Ros_StateServer_SendMsgToAllClient(controller, &sendMsgStatus, msgStatusSize);
 		}
 		Ros_Sleep(STATE_UPDATE_MIN_PERIOD);
 	}
